@@ -5,7 +5,8 @@ USER root
 WORKDIR /usr/src/app
 
 COPY package*.json ./
-RUN npm ci
+# Changed from npm ci to npm install to avoid the package-lock error
+RUN npm install
 
 COPY . .
 
