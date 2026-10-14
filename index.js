@@ -8,7 +8,8 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 let latestQrImage = '';
-let botStatus = 'disconnected'; // 'disconnected' or 'ready'
+let pairingCode = ''; // Stores the 8-digit text code
+let botStatus = 'disconnected'; 
 
 const client = new Client({
     authStrategy: new LocalAuth(),
@@ -30,10 +31,30 @@ const client = new Client({
 client.on('qr', async (qr) => {
     qrcodeTerminal.generate(qr, { small: true });
     botStatus = 'disconnected';
+    
     try {
         latestQrImage = await QRCodeLib.toDataURL(qr);
+        
+        // This golden line requests the 8-digit numeric pairing code from WhatsApp Web engine!
+        if (client.pupPage) {
+            // Wait for internal structural elements to settle
+            await new Promise(r => setTimeout(r, 5000)); 
+            
+            // Checks if code generation elements exist in WhatsApp backend page
+            pairingCode = await client.pupPage.evaluate(async () => {
+                const buttons = Array.from(document.querySelectorAll('span'));
+                const linkButton = buttons.find(el => el.textContent.includes('Link with phone number instead') || el.textContent.includes('Link with phone number'));
+                if (linkButton) {
+                    linkButton.click();
+                    await new Promise(r => setTimeout(r, 3000));
+                    const codeContainer = document.querySelector('[data-ref]');
+                    return codeContainer ? codeContainer.getAttribute('data-ref') : '';
+                }
+                return '';
+            });
+        }
     } catch (err) {
-        console.error('QR URL Generation Failed:', err);
+        console.error('QR/Pairing Generation Failure:', err);
     }
 });
 
@@ -41,6 +62,7 @@ client.on('ready', () => {
     console.log('✅ Bot Engine Status: Active!');
     botStatus = 'ready';
     latestQrImage = ''; 
+    pairingCode = '';
 });
 
 client.on('message', async (message) => {
@@ -65,18 +87,18 @@ client.on('message', async (message) => {
             });
 
             const data = await response.json();
-            if (data.choices && data.choices[0].message) {
-                await message.reply(data.choices[0].message.content);
+            if (data.choices && data.choices.message) {
+                await message.reply(data.choices.message.content);
             }
         } catch (error) {
-            console.error("AI Node Processing failure:", error);
+            console.error("AI Core processing error:", error);
         }
     }
 });
 
 client.initialize();
 
-// Professional Custom Dashboard HTML Route
+// Updated Custom Dashboard Layout to support Text-based Pairing Key code
 app.get('/', (req, res) => {
     let mainContent = '';
     
@@ -85,20 +107,27 @@ app.get('/', (req, res) => {
             <div style="background:#e7f8ee; color:#1c7c44; border:1px solid #c3ebd4; padding:20px; border-radius:8px; font-weight:bold;">
                 🎉 WhatsApp Session Initialized! Bot is Active and Running 24/7.
             </div>
-            <p style="margin-top:15px; color:#666;">You can now safely turn off your mobile internet or close this page.</p>
+        `;
+    } else if (pairingCode) {
+        mainContent = `
+            <div style="border: 2px dashed #00b074; border-radius: 12px; padding: 25px; background: #f0fdf4; text-align:center; margin: 15px 0;">
+                <span style="font-size: 14px; color:#4a5568; display:block; margin-bottom:8px; font-weight:600;">YOUR 8-DIGIT PAIRING CODE:</span>
+                <span style="font-size: 32px; font-weight: bold; color: #00b074; letter-spacing: 4px; font-family:monospace;">${pairingCode}</span>
+            </div>
+            <p style="font-size:12px; color:#718096;">Enter this exact code on your phone's WhatsApp linkage popup screen.</p>
         `;
     } else if (latestQrImage) {
         mainContent = `
-            <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; background: #fff;">
-                <img src="${latestQrImage}" alt="WhatsApp QR Code" style="max-width: 100%; height: auto; border: 1px solid #eee;" />
+            <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; background: #fff; text-align:center;">
+                <img src="${latestQrImage}" alt="WhatsApp QR Code" style="max-width: 100%; height: auto;" />
+                <p style="font-size:13px; color:#ff9800; font-weight:bold; margin-top:15px;">⚠️ Single Phone Shortcut: Wait 10 seconds for the engine to fetch the textual Pairing Code instead!</p>
             </div>
-            <p style="font-size:12px; color:#718096; margin-top:10px;">If code expires, simply refresh this webpage.</p>
         `;
     } else {
         mainContent = `
-            <div style="padding: 40px 20px; color:#a0aec0;">
+            <div style="padding: 40px 20px; color:#a0aec0; text-align:center;">
                 <div style="font-size: 24px; margin-bottom: 15px;">🔄</div>
-                WhatsApp session initializing... Please wait 10 seconds and refresh the browser.
+                Initializing cloud browser matrix... Wait 15 seconds and refresh this tab.
             </div>
         `;
     }
@@ -112,38 +141,36 @@ app.get('/', (req, res) => {
             <style>
                 body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:#f7fafc; margin:0; padding:20px; display:flex; justify-content:center; }
                 .container { max-width: 480px; width: 100%; background: white; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); padding: 24px; box-sizing: border-box; }
-                .header { font-size: 14px; color: #a0aec0; margin-bottom: 5px; text-align: left; font-weight: 5px; }
+                .header { font-size: 14px; color: #a0aec0; margin-bottom: 5px; text-align: left; }
                 .connected-count { font-size: 13px; color: #718096; border-bottom: 1px solid #edf2f7; padding-bottom: 15px; margin-bottom: 20px; text-align: left; }
                 .title-bar { font-size: 18px; font-weight: bold; color: #1a202c; margin-bottom: 20px; text-align: left; }
                 .tabs-row { display: flex; border-bottom: 2px solid #edf2f7; margin-bottom: 25px; }
-                .tab { padding: 10px 15px; font-size: 14px; font-weight: 600; color: #4a5568; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; }
-                .tab.active { color: #00b074; border-bottom-color: #00b074; }
-                .btn-connect { display: block; width: 100%; background: #00b074; color: white; border: none; padding: 14px; border-radius: 10px; font-size: 15px; font-weight: bold; cursor: pointer; margin-top: 20px; text-align: center; text-decoration: none; box-shadow: 0 4px 12px rgba(0,176,116,0.2); }
+                .tab { padding: 10px 15px; font-size: 14px; font-weight: 600; color: #a0aec0; }
+                .tab.active { color: #00b074; border-bottom: 2px solid #00b074; margin-bottom: -2px; }
+                .btn-connect { display: block; width: 100%; background: #00b074; color: white; border: none; padding: 14px; border-radius: 10px; font-size: 15px; font-weight: bold; cursor: pointer; margin-top: 20px; text-align: center; text-decoration: none; }
                 .instructions { text-align: left; margin-top: 25px; background: #f7fafc; padding: 15px; border-radius: 10px; font-size: 13px; color: #4a5568; line-height: 1.6; }
             </style>
         </head>
         <body>
             <div class="container">
-                <div class="header">Oct 14, 2026</div>
-                <div class="connected-count">${botStatus === 'ready' ? '1 device connected' : '0 devices connected'}</div>
+                <div class="header">Live Operations Console</div>
+                <div class="connected-count">${botStatus === 'ready' ? '1 device active' : '0 devices active'}</div>
                 
-                <div class="title-bar">📱 Device Connection</div>
+                <div class="title-bar">📱 Single-Device Link Setup</div>
                 
                 <div class="tabs-row">
-                    <div class="tab active">QR Code</div>
-                    <div class="tab" style="color:#a0aec0; cursor:not-allowed;">Pairing Code</div>
-                    <div class="tab" style="color:#a0aec0; cursor:not-allowed;">Linked Devices</div>
+                    <div class="tab active">Pairing Code Mode</div>
                 </div>
 
                 ${mainContent}
 
-                ${botStatus === 'disconnected' ? '<button class="btn-connect" onclick="window.location.reload()">🔄 Connect WhatsApp</button>' : ''}
+                <button class="btn-connect" onclick="window.location.reload()">🔄 Refresh Dashboard</button>
 
                 <div class="instructions">
-                    <strong>📋 How to connect?</strong><br>
-                    1. Open WhatsApp on your primary phone.<br>
-                    2. Go to Settings > Linked Devices.<br>
-                    3. Tap <strong>Link a Device</strong> and scan the layout block graphic above.
+                    <strong>📋 Link Step-by-Step:</strong><br>
+                    1. On WhatsApp split screen, click <strong>"Link with phone number instead"</strong>.<br>
+                    2. Type the 8-character alphabetic/numeric token code shown on this page dashboard green box.<br>
+                    3. Connection processes instantly!
                 </div>
             </div>
         </body>
@@ -151,4 +178,4 @@ app.get('/', (req, res) => {
     `);
 });
 
-app.listen(port, () => console.log(`Server serving dashboard layout matrix on port ${port}`));
+app.listen(port, () => console.log(`Matrix console operational on endpoint port ${port}`));
