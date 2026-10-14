@@ -2,7 +2,10 @@
   "name": "hari-whatsapp-bot",
   "version": "1.0.0",
   "main": "index.js",
-  "scripts": { "start": "node index.js" },
+  "scripts": {
+    "build": "npm install && npx puppeteer browsers install chrome",
+    "start": "node index.js"
+  },
   "dependencies": {
     "express": "^4.18.2",
     "whatsapp-web.js": "^1.23.0",
