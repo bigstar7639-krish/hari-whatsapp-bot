@@ -1,16 +1,17 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const express = require('express');
-const fetch = require('node-fetch'); // Required to communicate with Groq
+const fetch = require('node-fetch');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Initialize WhatsApp Client with specific arguments for Render
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
+        // This line forces it to use Render's standard Chrome path directly
+        executablePath: '/usr/bin/google-chrome',
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -24,22 +25,24 @@ const client = new Client({
     }
 });
 
-// Displays the QR Code in Render Logs
 client.on('qr', (qr) => {
     qrcode.generate(qr, { small: true });
-    console.log('QR Code generated! Go to Render logs to scan.');
+    console.log('👉 QR Code generated! Scan this in your logs.');
 });
 
 client.on('ready', () => {
-    console.log('WhatsApp Bot is successfully authenticated and ready!');
+    console.log('✅ WhatsApp Bot is ready!');
 });
 
-// Responds when a user types "!ai <question>"
 client.on('message', async (message) => {
     if (message.body.startsWith('!ai ')) {
-        const userPrompt = message.body.slice(4);
+        const userPrompt = message.body.slice(4).trim();
+        if (!userPrompt) return;
 
         try {
+            const chat = await message.getChat();
+            await chat.sendStateTyping();
+
             const response = await fetch("https://groq.com", {
                 method: "POST",
                 headers: {
@@ -53,18 +56,15 @@ client.on('message', async (message) => {
             });
 
             const data = await response.json();
-            const aiReply = data.choices[0].message.content;
-
-            await message.reply(aiReply);
-
+            if (data.choices && data.choices.message) {
+                await message.reply(data.choices.message.content);
+            }
         } catch (error) {
-            console.error("AI API Error:", error);
-            await message.reply("Sorry, I couldn't process that with Meta AI right now.");
+            console.error("AI Error:", error);
         }
     }
 });
 
 client.initialize();
-
-app.get('/', (req, res) => res.send('Bot Status: Online'));
-app.listen(port, () => console.log(`Web server listening on port ${port}`));
+app.get('/', (req, res) => res.send('Bot Active'));
+app.listen(port, () => console.log(`Listening on port ${port}`));
